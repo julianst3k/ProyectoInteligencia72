@@ -1,4 +1,5 @@
-# ProyectoInteligencia7.2
+# ProyectoInteligencia7.2  
+# Proyecto Clasificación de curvas de luz de estrellas periódicas ALeRCE - ZTF
 
 Nombre: Julián Solís, Amilcar Aravena  
 Tutor: Ignacio Reyes
