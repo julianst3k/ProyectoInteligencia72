@@ -9,8 +9,13 @@ from sklearn.model_selection import train_test_split
 
 from sklearn.ensemble import RandomForestRegressor
 
+from sklearn.metrics import confusion_matrix
+
 import pandas as pd
 
+import matplotlib.pyplot as plt
+
+from sklearn.utils.multiclass import unique_labels
 
 ## Leo el archivo
 data = pd.read_pickle('periodic_dataset/periodic_detections.pkl')
@@ -34,15 +39,12 @@ ultimate_label_test = pd.DataFrame()
 
 for j in (values):
     chosen_ids = np.random.choice(int(preproc.loc[j,'period']), replace=False, size=minimumTrainingSet)
+    print(len(chosen_ids))
     chosen_ids_training = chosen_ids[:int(len(chosen_ids)*0.8)]
     chosen_ids_testing = chosen_ids[int(len(chosen_ids)*0.8):]
     final_label_aux = labels.loc[labels['classALeRCE']==j]
     final_label_training = final_label_aux.iloc[chosen_ids_training]
     final_label_testing = final_label_aux.iloc[chosen_ids_testing]
-
-
-    final_data = data.iloc[chosen_ids]
-    #print(final_label_aux)
     ultimate_label_train = pd.concat([ultimate_label_train,final_label_training])
     ultimate_label_test = pd.concat([ultimate_label_test, final_label_testing])
 
@@ -77,7 +79,6 @@ fats_fs = FATS.FeatureSpace(
         'Color'])
 ultimate_data_test = []
 ultimate_data_train = []
-
 stars_training = ultimate_label_train.index.unique()
 for star in stars_training:
     first_lc = data.loc[star]
@@ -93,7 +94,6 @@ for star in stars_training:
         ultimate_data_train.append(features1)
 
 stars_testing = ultimate_label_test.index.unique()
-
 for star in stars_testing:
     first_lc = data.loc[star]
     first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
@@ -117,7 +117,7 @@ num_trees = 10
 
 max_nodes = 1000
 
-rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)
+rf = RandomForestClassifier(n_estimators = 1000, random_state = 42)
 # Aqui saco los valores de los labels
 
 values_train_final = ultimate_label_train['classALeRCE'].values
@@ -128,13 +128,67 @@ for j in values_train_final:
     onehot_values_train.append(cyka)
 values_test_final = ultimate_label_test['classALeRCE'].values
 onehot_values_test = []
-for j in values_train_final:
+for j in values_test_final:
     cyka = [0,0,0,0,0,0]
     cyka[np.where(values == j)[0][0]] = 1
-    onehot_values_train.append(cyka)
+    onehot_values_test.append(cyka)
 
 rf.fit(ultimate_data_train, onehot_values_train)
 predictions = rf.predict(ultimate_data_test)
 # Calculate the absolute errors
 errors = abs(predictions - onehot_values_test)
+print(errors)
 print('Mean Absolute Error:', round(np.mean(errors), 2), 'degrees.')
+def plot_confusion_matrix(y_true, y_pred, classes,
+                          normalize=True,
+                          title="Matriz de confusión normalizada",
+                          cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    if not title:
+        if normalize:
+            title = 'Normalized confusion matrix'
+        else:
+            title = 'Confusion matrix, without normalization'
+
+    # Compute confusion matrix
+    cm = confusion_matrix(y_true, y_pred)
+    # Only use the labels that appear in the data
+    classes = classes[unique_labels(y_true, y_pred)]
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    fig, ax = plt.subplots()
+    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
+    ax.figure.colorbar(im, ax=ax)
+    # We want to show all ticks...
+    ax.set(xticks=np.arange(cm.shape[1]),
+           yticks=np.arange(cm.shape[0]),
+           # ... and label them with the respective list entries
+           xticklabels=classes, yticklabels=classes,
+           title=title,
+           ylabel='True label',
+           xlabel='Predicted label')
+
+    # Rotate the tick labels and set their alignment.
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
+             rotation_mode="anchor")
+
+    # Loop over data dimensions and create text annotations.
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i in range(cm.shape[0]):
+        for j in range(cm.shape[1]):
+            ax.text(j, i, format(cm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm[i, j] > thresh else "black")
+    fig.tight_layout()
+    return ax
+plot_confusion_matrix(onehot_values_test, predictions, values)
