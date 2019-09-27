@@ -7,7 +7,7 @@ import sklearn
 
 from sklearn.model_selection import train_test_split
 
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestClassifier
 
 from sklearn.metrics import confusion_matrix
 
@@ -126,7 +126,11 @@ for j in values_train_final:
     cyka = [0,0,0,0,0,0]
     cyka[np.where(values == j)[0][0]] = 1
     onehot_values_train.append(cyka)
+p=np.random.permutation(len(onehot_values_train))
+ultimate_data_train = np.array(ultimate_data_train)[p]
+onehot_values_train = np.array(onehot_values_train)[p]
 values_test_final = ultimate_label_test['classALeRCE'].values
+
 onehot_values_test = []
 for j in values_test_final:
     cyka = [0,0,0,0,0,0]
@@ -139,6 +143,8 @@ predictions = rf.predict(ultimate_data_test)
 errors = abs(predictions - onehot_values_test)
 print(errors)
 print('Mean Absolute Error:', round(np.mean(errors), 2), 'degrees.')
+onehot_values_test = np.array(onehot_values_test).argmax(1)
+predictions = np.array(predictions).argmax(1)
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=True,
                           title="Matriz de confusión normalizada",
@@ -191,4 +197,6 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
+
 plot_confusion_matrix(onehot_values_test, predictions, values)
+plt.show()
