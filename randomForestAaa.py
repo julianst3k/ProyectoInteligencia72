@@ -28,17 +28,22 @@ labels = pd.read_pickle('periodic_dataset/periodic_labels.pkl')
 
 preproc = labels.groupby('classALeRCE').count()
 
-
 values = preproc.index.unique()
+
 
 minimumTrainingSet = preproc.min().iloc[0]
 
 # Hago 80%-20% para el training set, en base al minimo necesario, el cual es minimumTrainingSet
 ultimate_label_train = pd.DataFrame()
 ultimate_label_test = pd.DataFrame()
+weight = []
 
 for j in (values):
-    chosen_ids = np.random.choice(int(preproc.loc[j,'period']), replace=False, size=minimumTrainingSet)
+    val = int(preproc.loc[j, 'period'])
+    if(int(preproc.loc[j,'period'])>10000):
+        val = 10000
+    chosen_ids = np.random.choice(int(preproc.loc[j,'period']), replace=False, size=val)
+    weight.append(int(preproc.loc[j,'period']))
     print(len(chosen_ids))
     chosen_ids_training = chosen_ids[:int(len(chosen_ids)*0.8)]
     chosen_ids_testing = chosen_ids[int(len(chosen_ids)*0.8):]
@@ -84,9 +89,10 @@ for star in stars_training:
     first_lc = data.loc[star]
     first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
     flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+    flc1.dropna()
     flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
     valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-    if(len(valores)<5):
+    if(len(valores)<10):
         index = ultimate_label_train.loc[star]
         ultimate_label_train.drop(star, axis=0, inplace=True)
     else:
@@ -99,6 +105,7 @@ for star in stars_testing:
     first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
     flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
     flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+    flc1.dropna()
     valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
     if(len(valores)<5):
         index = ultimate_label_test.loc[star]
@@ -106,7 +113,7 @@ for star in stars_testing:
     else:
         features1 = fats_fs.calculateFeature(valores.T).result().tolist()
         ultimate_data_test.append(features1)
-
+print("xD")
 num_steps = 100
 
 num_classes = 6
@@ -117,7 +124,7 @@ num_trees = 10
 
 max_nodes = 1000
 
-rf = RandomForestClassifier(n_estimators = 1000, random_state = 42)
+rf = RandomForestClassifier(n_estimators = 20, n_jobs=2, random_state = 0, class_weights="balanced")
 # Aqui saco los valores de los labels
 
 values_train_final = ultimate_label_train['classALeRCE'].values
@@ -136,7 +143,6 @@ for j in values_test_final:
     cyka = [0,0,0,0,0,0]
     cyka[np.where(values == j)[0][0]] = 1
     onehot_values_test.append(cyka)
-
 rf.fit(ultimate_data_train, onehot_values_train)
 predictions = rf.predict(ultimate_data_test)
 # Calculate the absolute errors
@@ -144,6 +150,7 @@ errors = abs(predictions - onehot_values_test)
 print(errors)
 print('Mean Absolute Error:', round(np.mean(errors), 2), 'degrees.')
 onehot_values_test = np.array(onehot_values_test).argmax(1)
+predictionLol = predictions
 predictions = np.array(predictions).argmax(1)
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=True,
