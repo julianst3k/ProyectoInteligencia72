@@ -79,36 +79,33 @@ ultimate_data_test = []
 ultimate_data_train = []
 
 stars_training = ultimate_label_train.index.unique()
-print(stars_training)
-print(ultimate_label_train)
-def generateFATS(label):
-    stars_training = label.index.unique()
-    for star in stars_training:
-        first_lc = data.loc[star]
-        first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
-        flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
-        flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
-        valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-        if(len(valores)<5):
-            index = label.loc[star]
-            label.drop(star, axis=0, inplace=True)
-        else:
-            features1 = fats_fs.calculateFeature(valores.T).result().tolist()
-            ultimate_data_train.append(features1)
-#stars_testing = ultimate_label_test.index.unique()
+for star in stars_training:
+    first_lc = data.loc[star]
+    first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+    flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+    flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+    valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+    if(len(valores)<5):
+        index = ultimate_label_train.loc[star]
+        ultimate_label_train.drop(star, axis=0, inplace=True)
+    else:
+        features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+        ultimate_data_train.append(features1)
 
-#for star in stars_testing:
-#    first_lc = data.loc[star]
-#    first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
-#    flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
-#    flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
-#    valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-#    if(len(valores)<5):
-#        index = ultimate_label_test.loc[star]
-#        ultimate_label_test.drop(star, axis=0, inplace=True)
-#    else:
-#        features1 = fats_fs.calculateFeature(valores.T).result().tolist()
-#        ultimate_data_test.append(features1)
+stars_testing = ultimate_label_test.index.unique()
+
+for star in stars_testing:
+    first_lc = data.loc[star]
+    first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+    flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+    flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+    valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+    if(len(valores)<5):
+        index = ultimate_label_test.loc[star]
+        ultimate_label_test.drop(star, axis=0, inplace=True)
+    else:
+        features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+        ultimate_data_test.append(features1)
 
 num_steps = 100
 
@@ -123,9 +120,21 @@ max_nodes = 1000
 rf = RandomForestRegressor(n_estimators = 1000, random_state = 42)
 # Aqui saco los valores de los labels
 
-values_train = ultimate_label_train['classALeRCE'].values
-ultimate_values_train = []
-for j in values_final:
+values_train_final = ultimate_label_train['classALeRCE'].values
+onehot_values_train = []
+for j in values_train_final:
+    cyka = [0,0,0,0,0,0]
+    cyka[np.where(values == j)[0][0]] = 1
+    onehot_values_train.append(cyka)
+values_test_final = ultimate_label_test['classALeRCE'].values
+onehot_values_test = []
+for j in values_train_final:
+    cyka = [0,0,0,0,0,0]
+    cyka[np.where(values == j)[0][0]] = 1
+    onehot_values_train.append(cyka)
 
-
-print(values_final)
+rf.fit(ultimate_data_train, onehot_values_train)
+predictions = rf.predict(ultimate_data_test)
+# Calculate the absolute errors
+errors = abs(predictions - onehot_values_test)
+print('Mean Absolute Error:', round(np.mean(errors), 2), 'degrees.')
