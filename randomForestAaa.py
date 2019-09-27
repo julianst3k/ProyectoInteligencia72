@@ -25,6 +25,7 @@ data.drop_duplicates()
 dataValues = data.index.unique()
 
 labels = pd.read_pickle('periodic_dataset/periodic_labels.pkl')
+labels.dropna()
 
 preproc = labels.groupby('classALeRCE').count()
 
@@ -40,8 +41,8 @@ weight = []
 
 for j in (values):
     val = int(preproc.loc[j, 'period'])
-    if(int(preproc.loc[j,'period'])>10000):
-        val = 10000
+    if(int(preproc.loc[j,'period'])>1000):
+        val = 1000
     chosen_ids = np.random.choice(int(preproc.loc[j,'period']), replace=False, size=val)
     weight.append(int(preproc.loc[j,'period']))
     print(len(chosen_ids))
@@ -85,20 +86,25 @@ fats_fs = FATS.FeatureSpace(
 ultimate_data_test = []
 ultimate_data_train = []
 stars_training = ultimate_label_train.index.unique()
+i=0
 for star in stars_training:
+    i+=1
     first_lc = data.loc[star]
     first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
     flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
     flc1.dropna()
     flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
     valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-    if(len(valores)<10):
+    if(len(valores)<10 or ultimate_label_train.loc[star, 'period']=="\\\\nodata"):
         index = ultimate_label_train.loc[star]
         ultimate_label_train.drop(star, axis=0, inplace=True)
     else:
         features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+        features1.append(float(ultimate_label_train.loc[star, 'period']))
         ultimate_data_train.append(features1)
-
+    if(i%100==0):
+        print(i)
+print("xd")
 stars_testing = ultimate_label_test.index.unique()
 for star in stars_testing:
     first_lc = data.loc[star]
@@ -107,11 +113,13 @@ for star in stars_testing:
     flc2 = first_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
     flc1.dropna()
     valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-    if(len(valores)<5):
+
+    if(len(valores)<10 or ultimate_label_test.loc[star, 'period']=="\\\\nodata"):
         index = ultimate_label_test.loc[star]
         ultimate_label_test.drop(star, axis=0, inplace=True)
     else:
         features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+        features1.append(float(ultimate_label_test.loc[star, 'period']))
         ultimate_data_test.append(features1)
 print("xD")
 num_steps = 100
@@ -124,14 +132,14 @@ num_trees = 10
 
 max_nodes = 1000
 
-rf = RandomForestClassifier(n_estimators = 20, n_jobs=2, random_state = 0, class_weights="balanced")
+rf = RandomForestClassifier(n_estimators = 50, n_jobs=2, random_state = 10, class_weight="balanced")
 # Aqui saco los valores de los labels
 
 values_train_final = ultimate_label_train['classALeRCE'].values
 onehot_values_train = []
 for j in values_train_final:
     cyka = [0,0,0,0,0,0]
-    cyka[np.where(values == j)[0][0]] = 1
+    cyka[5-np.where(values == j)[0][0]] = 1
     onehot_values_train.append(cyka)
 p=np.random.permutation(len(onehot_values_train))
 ultimate_data_train = np.array(ultimate_data_train)[p]
@@ -141,7 +149,7 @@ values_test_final = ultimate_label_test['classALeRCE'].values
 onehot_values_test = []
 for j in values_test_final:
     cyka = [0,0,0,0,0,0]
-    cyka[np.where(values == j)[0][0]] = 1
+    cyka[5-np.where(values == j)[0][0]] = 1
     onehot_values_test.append(cyka)
 rf.fit(ultimate_data_train, onehot_values_train)
 predictions = rf.predict(ultimate_data_test)
