@@ -228,11 +228,12 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
-def generateDataFATS(filename="fats_processed.pkl"):
+def generateDataFATS(filename="fats_processed.pkl", toFile=True):
     initialData = DataProcessor()
     initialData.generateLabelsPartition()
     initialData.applyFATS(feature_list, exclude_list)
-    initialData.save_object(filename)
+    if(toFile):
+        initialData.save_object(filename)
 # Función para abrir información en formato pkl. En el caso de que no exista, se genera y se abre otro.
 def openDataFATSGenerado(filename):
     try:
@@ -242,10 +243,14 @@ def openDataFATSGenerado(filename):
         generateDataFATS(filename)
         openDataFATSGenerado(filename)
     return data
+#La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
+#generando un archivo para poder debuggear de inmediato la información.
+#data = generateDataFATS(toFile=False)
 data = openDataFATSGenerado("fats_processed.pkl")
 firstClassifier = classifier()
 firstClassifier.classifier(data)
 feature_list.append('Period')
+#Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
 #firstClassifier.exportTree(feature_list)
 #firstClassifier.importanceVariable(feature_list)
 plt.show()
