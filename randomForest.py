@@ -241,12 +241,15 @@ def openDataFATSGenerado(filename):
         data = pickle.load(input)
     except:
         generateDataFATS(filename)
-        openDataFATSGenerado(filename)
+        data = openDataFATSGenerado(filename)
     return data
 #La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
 #generando un archivo para poder debuggear de inmediato la información.
-#data = generateDataFATS(toFile=False)
-data = openDataFATSGenerado("fats_processed.pkl")
+toFile = True
+if toFile:
+    data = openDataFATSGenerado("fats_processed.pkl")
+else:
+    data = generateDataFATS(toFile=False)
 firstClassifier = classifier()
 firstClassifier.classifier(data)
 feature_list.append('Period')
