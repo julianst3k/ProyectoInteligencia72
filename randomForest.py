@@ -1,6 +1,8 @@
 
 import numpy as np
 
+import math
+
 import FATS
 
 import sklearn
@@ -68,29 +70,42 @@ class DataProcessor:
             first_lc = self.data.loc[star]
             first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
             flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
             flc1.dropna()
+            flc2.dropna()
             valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-            if (len(valores) < 10 or self.ultimate_label_train.loc[star, 'period'] == "\\\\nodata"):
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if (len(valores) < 8 or len(valores2) < 8 or self.ultimate_label_train.loc[star, 'period'] == "\\\\nodata"):
                 index = self.ultimate_label_train.loc[star]
                 self.ultimate_label_train.drop(star, axis=0, inplace=True)
             else:
                 features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
                 features1.append(float(self.ultimate_label_train.loc[star, 'period']))
+                features1.extend(features2)
+                features1.append(features1[11]-features2[11])
                 self.ultimate_data_train.append(features1)
         stars_testing = self.ultimate_label_test.index.unique()
         for star in stars_testing:
             first_lc = self.data.loc[star]
             first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
             flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
             flc1.dropna()
+            flc2.dropna()
             valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
-
-            if (len(valores) < 10 or self.ultimate_label_test.loc[star, 'period'] == "\\\\nodata"):
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if (len(valores) < 8 or len(valores2) < 8 or self.ultimate_label_test.loc[star, 'period'] == "\\\\nodata"):
                 index = self.ultimate_label_test.loc[star]
                 self.ultimate_label_test.drop(star, axis=0, inplace=True)
             else:
                 features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
                 features1.append(float(self.ultimate_label_test.loc[star, 'period']))
+                features1.extend(features2)
+                features1.append(features1[11] - features2[11])
                 self.ultimate_data_test.append(features1)
 
     def save_object(obj, filename):
@@ -250,10 +265,33 @@ if toFile:
     data = openDataFATSGenerado("fats_processed.pkl")
 else:
     data = generateDataFATS(toFile=False)
+## Por algún motivo existe un NaN a la hora de generar resultados, por lo cual se busco por aca. Es de suponer que
+## Dado que ocurrió una vez puede ocurrir mas veces, esto es provisorio y por ende se generara un detector de nan
+## Dsps
+nansuspect = []
+for a in data.ultimate_data_train:
+    for j in a:
+        if(math.isnan(j)):
+            nansuspect.extend(a)
+index = data.ultimate_data_train.index(nansuspect)
+data.ultimate_data_train.pop(index)
+stars_training = data.ultimate_label_train.index.unique()
+starnan = stars_training[index]
+data.ultimate_label_train.drop(starnan, axis=0, inplace=True)
+
+
 firstClassifier = classifier()
 firstClassifier.classifier(data)
 feature_list.append('Period')
+feature_list.extend([
+    'Amplitude2', 'AndersonDarling2', 'Autocor_length2',
+    'Beyond1Std2', 'CAR_sigma2', 'CAR_mean2', 'CAR_tau2',
+    'Con2', 'Eta_e2', 'Gskew2', 'MaxSlope2', 'Mean2',
+    'Meanvariance2', 'MedianAbsDev2', 'MedianBRP2',
+    'PairSlopeTrend2', 'PercentAmplitude2', 'Q312',
+    'Rcs2', 'Skew2', 'SmallKurtosis2',
+    'Std2', 'StetsonK2','Color'])
 #Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
 #firstClassifier.exportTree(feature_list)
-#firstClassifier.importanceVariable(feature_list)
+firstClassifier.importanceVariable(feature_list)
 plt.show()
