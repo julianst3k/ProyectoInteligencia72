@@ -56,15 +56,14 @@ class DataProcessor:
             final_label_testing = final_label_aux.iloc[chosen_ids_testing]
             self.ultimate_label_train = pd.concat([self.ultimate_label_train,final_label_training])
             self.ultimate_label_test = pd.concat([self.ultimate_label_test, final_label_testing])
-
     def applyFATS(self, feature_list, exclude_list):
         fats_fs = FATS.FeatureSpace(
             Data=['magnitude', 'time', 'error'],
             featureList=feature_list,
             excludeList=exclude_list)
         oids = self.data.index.unique()
-        self.ultimate_data_test = []
-        self.ultimate_data_train = []
+        self.ultimate_data_test_mixed = []
+        self.ultimate_data_train_mixed = []
         stars_training = self.ultimate_label_train.index.unique()
         for star in stars_training:
             first_lc = self.data.loc[star]
@@ -84,8 +83,8 @@ class DataProcessor:
                 features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
                 features1.append(float(self.ultimate_label_train.loc[star, 'period']))
                 features1.extend(features2)
-                features1.append(features1[11]-features2[11])
-                self.ultimate_data_train.append(features1)
+                features1.append(features1[11] - features2[11])
+                self.ultimate_data_train_mixed.append(features1)
         stars_testing = self.ultimate_label_test.index.unique()
         for star in stars_testing:
             first_lc = self.data.loc[star]
@@ -106,7 +105,63 @@ class DataProcessor:
                 features1.append(float(self.ultimate_label_test.loc[star, 'period']))
                 features1.extend(features2)
                 features1.append(features1[11] - features2[11])
-                self.ultimate_data_test.append(features1)
+                self.ultimate_data_test_mixed.append(features1)
+
+    def applyFATSTwoLists(self, feature_list, exclude_list):
+        fats_fs = FATS.FeatureSpace(
+            Data=['magnitude', 'time', 'error'],
+            featureList=feature_list,
+            excludeList=exclude_list)
+        oids = self.data.index.unique()
+        self.ultimate_data_test_band1 = []
+        self.ultimate_data_test_band2 = []
+        self.ultimate_data_train_band1 = []
+        self.ultimate_data_train_band2 = []
+        stars_training = self.ultimate_label_train.index.unique()
+        for star in stars_training:
+            first_lc = self.data.loc[star]
+            first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+            flc1.dropna()
+            flc2.dropna()
+            valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if (len(valores) < 8 or len(valores2) < 8 or self.ultimate_label_train.loc[star, 'period'] == "\\\\nodata"):
+                index = self.ultimate_label_train.loc[star]
+                self.ultimate_label_train.drop(star, axis=0, inplace=True)
+            else:
+                features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
+                features1.append(float(self.ultimate_label_train.loc[star, 'period']))
+                self.ultimate_data_train_band1.append(features1.copy())
+                features_band2 = features2.copy()
+                features_band2.append(float(self.ultimate_label_train.loc[star, 'period']))
+                self.ultimate_data_train_band2.append(features_band2.copy())
+        stars_testing = self.ultimate_label_test.index.unique()
+        for star in stars_testing:
+            first_lc = self.data.loc[star]
+            first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+            flc1.dropna()
+            flc2.dropna()
+            valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if (len(valores) < 8 or len(valores2) < 8 or self.ultimate_label_test.loc[star, 'period'] == "\\\\nodata"):
+                index = self.ultimate_label_test.loc[star]
+                self.ultimate_label_test.drop(star, axis=0, inplace=True)
+            else:
+                features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
+                features1.append(float(self.ultimate_label_test.loc[star, 'period']))
+                self.ultimate_data_test_band1.append(features1.copy())
+                features1.extend(features2)
+                features_band2 = features2.copy()
+                features_band2.append(float(self.ultimate_label_test.loc[star, 'period']))
+                self.ultimate_data_test_band2.append(features_band2.copy())
 
     def save_object(obj, filename):
         with open(filename, 'wb') as output:  # Overwrites any existing file.
@@ -145,7 +200,7 @@ class classifier():
                 feats_aux.append(feats[index])
             test_aux.append(feats_aux)
         self.data.ultimate_data_test = test_aux
-    def classifier(self, data, change_parameters = None):
+    def classifier(self, data, change_parameters = None, means = None):
         self.data = data
         if(change_parameters!=None):
             self.pickParameters(change_parameters)
@@ -157,7 +212,15 @@ class classifier():
             cyka[np.where(data.values == j)[0][0]] = 1
             onehot_values_train.append(cyka)
         p=np.random.permutation(len(onehot_values_train))
-        self.data.ultimate_data_train = np.array(self.data.ultimate_data_train)[p]
+        if(means == None):
+            try:
+                self.data.ultimate_data_train = np.array(self.data.ultimate_data_train)[p]
+            except:
+                print("data not available")
+        else:
+            self.data.ultimate_data_train_band1 = np.array(self.data.ultimate_data_train_band1)[p]
+            self.data.ultimate_data_train_band2 = np.array(self.data.ultimate_data_train_band2)[p]
+            self.rf2 = RandomForestClassifier(n_estimators = 50, n_jobs=-1, random_state = 10, class_weight="balanced")
         onehot_values_train = np.array(onehot_values_train)[p]
         values_test_final = data.ultimate_label_test['classALeRCE'].values
         onehot_values_test = []
@@ -165,15 +228,26 @@ class classifier():
             cyka = [0,0,0,0,0,0]
             cyka[np.where(data.values == j)[0][0]] = 1
             onehot_values_test.append(cyka)
-        self.rf.fit(self.data.ultimate_data_train, onehot_values_train)
-        predictions = self.rf.predict(self.data.ultimate_data_test)
-        # Calculate the absolute errors
-        errors = abs(predictions - onehot_values_test)
-        print('Mean Absolute Error:', round(np.mean(errors), 2), 'degrees.')
-        onehot_values_test = np.array(onehot_values_test).argmax(1)
-        predictionLol = predictions
-        predictions = np.array(predictions).argmax(1)
-        plot_confusion_matrix(onehot_values_test, predictions, data.values)
+        if means==None:
+            self.rf.fit(self.data.ultimate_data_train, onehot_values_train)
+            predictions = self.rf.predict(self.data.ultimate_data_test)
+            onehot_values_test = np.array(onehot_values_test).argmax(1)
+            predictions = np.array(predictions).argmax(1)
+            plot_confusion_matrix(onehot_values_test, predictions, data.values)
+        else:
+            self.rf.fit(self.data.ultimate_data_train_band1, onehot_values_train)
+            self.rf2.fit(self.data.ultimate_data_train_band2, onehot_values_train)
+            predictions_one = self.rf.predict(self.data.ultimate_data_test_band1)
+            predictions_two = self.rf2.predict(self.data.ultimate_data_test_band2)
+            onehot_values_test = np.array(onehot_values_test).argmax(1)
+            predictions = []
+            for i in range(len(predictions_one)):
+                aux = []
+                for j in range(len(predictions_one[i])):
+                    aux.append((predictions_one[i][j]+predictions_two[i][j])/2)
+                predictions.append(aux)
+            predictions = np.array(predictions).argmax(1)
+            plot_confusion_matrix(onehot_values_test, predictions, data.values)
     def exportTree(self, features):
         estimator = self.rf.estimators_[0]
         export_graphviz(estimator, out_file='tree.dot',
@@ -243,54 +317,57 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
-def generateDataFATS(filename="fats_processed.pkl", toFile=True):
+def generateDataFATS(filename="fats_processed.pkl", toFile=True, means=False):
     initialData = DataProcessor()
     initialData.generateLabelsPartition()
-    initialData.applyFATS(feature_list, exclude_list)
+    if means:
+        initialData.applyFATSTwoLists(feature_list, exclude_list)
+    else:
+         initialData.applyFATS(feature_list, exclude_list)
     if(toFile):
         initialData.save_object(filename)
 # Función para abrir información en formato pkl. En el caso de que no exista, se genera y se abre otro.
-def openDataFATSGenerado(filename):
+def openDataFATSGenerado(filename, means=False):
     try:
         input = open(filename, 'rb')
         data = pickle.load(input)
     except:
-        generateDataFATS(filename)
+        generateDataFATS(filename, means=means)
         data = openDataFATSGenerado(filename)
     return data
 #La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
 #generando un archivo para poder debuggear de inmediato la información.
 toFile = True
+means = True
 if toFile:
-    data = openDataFATSGenerado("fats_processed.pkl")
+    data = openDataFATSGenerado("fats_processed.pkl", means=means)
 else:
-    data = generateDataFATS(toFile=False)
+    data = generateDataFATS(toFile=False, means=means)
 ## Por algún motivo existe un NaN a la hora de generar resultados, por lo cual se busco por aca. Es de suponer que
 ## Dado que ocurrió una vez puede ocurrir mas veces, esto es provisorio y por ende se generara un detector de nan
 ## Dsps
 nansuspect = []
-for a in data.ultimate_data_train:
+for a in data.ultimate_data_test_band2:
     for j in a:
         if(math.isnan(j)):
             nansuspect.extend(a)
-index = data.ultimate_data_train.index(nansuspect)
-data.ultimate_data_train.pop(index)
-stars_training = data.ultimate_label_train.index.unique()
+index = data.ultimate_data_test_band2.index(nansuspect)
+data.ultimate_data_test_band2.pop(index)
+data.ultimate_data_test_band1.pop(index)
+stars_training = data.ultimate_label_test.index.unique()
 starnan = stars_training[index]
-data.ultimate_label_train.drop(starnan, axis=0, inplace=True)
-
-
+data.ultimate_label_test.drop(starnan, axis=0, inplace=True)
 firstClassifier = classifier()
-firstClassifier.classifier(data)
+firstClassifier.classifier(data, means=means)
 feature_list.append('Period')
-feature_list.extend([
+feature_list2 = [
     'Amplitude2', 'AndersonDarling2', 'Autocor_length2',
     'Beyond1Std2', 'CAR_sigma2', 'CAR_mean2', 'CAR_tau2',
     'Con2', 'Eta_e2', 'Gskew2', 'MaxSlope2', 'Mean2',
     'Meanvariance2', 'MedianAbsDev2', 'MedianBRP2',
     'PairSlopeTrend2', 'PercentAmplitude2', 'Q312',
     'Rcs2', 'Skew2', 'SmallKurtosis2',
-    'Std2', 'StetsonK2','Color'])
+    'Std2', 'StetsonK2','Color']
 #Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
 #firstClassifier.exportTree(feature_list)
 firstClassifier.importanceVariable(feature_list)
