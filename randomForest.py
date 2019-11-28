@@ -331,22 +331,24 @@ class classifier():
             self.rf2.fit(self.ultimate_data_train_band2, onehot_values_train)
             predictions = []
             if(not thirdSol):
-                predictions_one = self.rf2.predict(self.data.ultimate_data_test_band1)
+                predictions_one = self.rf1.predict(self.data.ultimate_data_test_band1)
                 predictions_two = self.rf2.predict(self.data.ultimate_data_test_band2)
                 for i in range(len(predictions_one)):
                     aux = []
                     aux.append(round((predictions_one[i] + predictions_two[i])/2))
                     predictions.append(round((predictions_one[i] + predictions_two[i])/2))
             else:
+
                 for j in range(len(self.data.ultimate_data_test_band1)):
                     predict = self.twoBandPredictor(starFats=self.data.ultimate_data_test_band1[j],
                                                              starFats2=self.data.ultimate_data_test_band2[j],
-                                                             starLen = self.data.ultimate_data_test_lengths[j])
+                                                             starLen = self.data.ultimate_data_test_lengths[j],
+                                                                correctLabel = onehot_values_test[j])
                     predictions.append(predict)
-                    if j%100 == 0:
-                        print(j)
+
+
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
-    def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None):
+    def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None, correctLabel=None):
         starFats = [starFats]
         starFats2 = [starFats2]
         if starLen == None:
@@ -368,14 +370,16 @@ class classifier():
                 predictions_one = self.rf1.predict(starFats)[0]
                 predictions_two = self.rf2.predict(starFats2)[0]
                 proba_one = self.rf1.predict_proba(starFats)[0]
-                proba_two = self.rf2.predict_proba(starFats)[0]
+                proba_two = self.rf2.predict_proba(starFats2)[0]
                 proba = []
                 if max(proba_one)>max(proba_two)+0.2:
                     return predictions_one
                 if max(proba_two)>max(proba_one)+0.2:
                     return predictions_two
+                if predictions_one==predictions_two:
+                    return predictions_one
                 for a in range(len(proba_one)):
-                    proba.append((proba_one[a]+proba_two[a])/2)
+                    proba.append((proba_one[a]+proba_two[a])/(2))
                 return proba.index(max(proba))
 
     def exportTree(self, features):
