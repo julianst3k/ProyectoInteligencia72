@@ -36,6 +36,13 @@ class DataProcessor:
         self.dataValues = data.index.unique()
         self.labels = pd.read_pickle('periodic_dataset/periodic_labels.pkl')
         self.labels.dropna()
+        self.ultimate_data_test_band1 = []
+        self.ultimate_data_test_band2 = []
+        self.ultimate_data_train_band1 = []
+        self.ultimate_data_train_band2 = []
+        self.ultimate_data_test_lengths = []
+        self.ultimate_data_test = []
+        self.ultimate_data_train = []
     # Se genera la partición
     def generateLabelsPartition(self, max_data = 1000):
         preproc = self.labels.groupby('classALeRCE').count()
@@ -62,8 +69,6 @@ class DataProcessor:
             featureList=feature_list,
             excludeList=exclude_list)
         oids = self.data.index.unique()
-        self.ultimate_data_test_mixed = []
-        self.ultimate_data_train_mixed = []
         stars_training = self.ultimate_label_train.index.unique()
         for star in stars_training:
             first_lc = self.data.loc[star]
@@ -84,7 +89,7 @@ class DataProcessor:
                 features1.append(float(self.ultimate_label_train.loc[star, 'period']))
                 features1.extend(features2)
                 features1.append(features1[11] - features2[11])
-                self.ultimate_data_train_mixed.append(features1)
+                self.ultimate_data_train.append(features1)
         stars_testing = self.ultimate_label_test.index.unique()
         for star in stars_testing:
             first_lc = self.data.loc[star]
@@ -105,18 +110,15 @@ class DataProcessor:
                 features1.append(float(self.ultimate_label_test.loc[star, 'period']))
                 features1.extend(features2)
                 features1.append(features1[11] - features2[11])
-                self.ultimate_data_test_mixed.append(features1)
+                self.ultimate_data_test.append(features1)
 
-    def applyFATSTwoLists(self, feature_list, exclude_list):
+
+    def applyFATSTwoLists(self, feature_list, exclude_list, both):
         fats_fs = FATS.FeatureSpace(
             Data=['magnitude', 'time', 'error'],
             featureList=feature_list,
             excludeList=exclude_list)
         oids = self.data.index.unique()
-        self.ultimate_data_test_band1 = []
-        self.ultimate_data_test_band2 = []
-        self.ultimate_data_train_band1 = []
-        self.ultimate_data_train_band2 = []
         stars_training = self.ultimate_label_train.index.unique()
         for star in stars_training:
             first_lc = self.data.loc[star]
@@ -136,9 +138,13 @@ class DataProcessor:
                 features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
                 features1.append(float(self.ultimate_label_train.loc[star, 'period']))
                 self.ultimate_data_train_band1.append(features1.copy())
+                features1.extend(features2)
                 features_band2 = features2.copy()
                 features_band2.append(float(self.ultimate_label_train.loc[star, 'period']))
                 self.ultimate_data_train_band2.append(features_band2.copy())
+                features1.append(features1[11] - features2[11])
+                if both:
+                    self.ultimate_data_train.append(features1)
         stars_testing = self.ultimate_label_test.index.unique()
         for star in stars_testing:
             first_lc = self.data.loc[star]
@@ -162,7 +168,89 @@ class DataProcessor:
                 features_band2 = features2.copy()
                 features_band2.append(float(self.ultimate_label_test.loc[star, 'period']))
                 self.ultimate_data_test_band2.append(features_band2.copy())
-
+                features1.append(features1[11] - features2[11])
+                if both:
+                    self.ultimate_data_test.append(features1)
+    def applyFATSTwoLists_third(self, feature_list, exclude_list):
+        fats_fs = FATS.FeatureSpace(
+            Data=['magnitude', 'time', 'error'],
+            featureList=feature_list,
+            excludeList=exclude_list)
+        oids = self.data.index.unique()
+        stars_training = self.ultimate_label_train.index.unique()
+        for star in stars_training:
+            first_lc = self.data.loc[star]
+            first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+            flc1.dropna()
+            flc2.dropna()
+            valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if (len(valores) < 8 or len(valores2) < 8 or self.ultimate_label_train.loc[star, 'period'] == "\\\\nodata"):
+                index = self.ultimate_label_train.loc[star]
+                self.ultimate_label_train.drop(star, axis=0, inplace=True)
+            else:
+                features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
+                features1.append(float(self.ultimate_label_train.loc[star, 'period']))
+                self.ultimate_data_train_band1.append(features1.copy())
+                features1.extend(features2)
+                features_band2 = features2.copy()
+                features_band2.append(float(self.ultimate_label_train.loc[star, 'period']))
+                self.ultimate_data_train_band2.append(features_band2.copy())
+                features1.append(features1[11] - features2[11])
+                if both:
+                    self.ultimate_data_train.append(features1)
+        stars_testing = self.ultimate_label_test.index.unique()
+        for star in stars_testing:
+            first_lc = self.data.loc[star]
+            first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+            second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+            flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+            flc1.dropna()
+            flc2.dropna()
+            valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+            if ((len(valores) < 8 and len(valores2) < 8) or self.ultimate_label_test.loc[star, 'period'] == "\\\\nodata"):
+                index = self.ultimate_label_test.loc[star]
+                self.ultimate_label_test.drop(star, axis=0, inplace=True)
+            else:
+                if(len(valores)<8):
+                    features1 = [0]*24
+                else:
+                    features1 = fats_fs.calculateFeature(valores.T).result().tolist()
+                if(len(valores2)<8):
+                    features2 = [0]*24
+                else:
+                    features2 = fats_fs.calculateFeature(valores2.T).result().tolist()
+                features1.append(float(self.ultimate_label_test.loc[star, 'period']))
+                self.ultimate_data_test_band1.append(features1.copy())
+                features1.extend(features2)
+                features_band2 = features2.copy()
+                features_band2.append(float(self.ultimate_label_test.loc[star, 'period']))
+                self.ultimate_data_test_band2.append(features_band2.copy())
+                self.ultimate_data_test_lengths.append([len(valores),len(valores2)])
+    def mixTwo(self):
+        self.ultimate_data_train=[]
+        for i in range(len(self.ultimate_data_train_band1)):
+            features = self.ultimate_data_train_band1[i]
+            featurest = self.ultimate_data_train_band2[i]
+            features1 = list(features.copy())
+            features2 = list(featurest.copy())
+            features2.pop(len(features2)-1)
+            features1.extend(features2)
+            features1.append(features[11]-featurest[11])
+            self.ultimate_data_train.append(features1)
+    def fixColor(self):
+        for a in range(len(self.ultimate_data_train_band1)):
+            self.ultimate_data_train_band1[a].append(self.ultimate_data_train_band1[a][11]-self.ultimate_data_train_band2[a][11])
+            self.ultimate_data_train_band2[a].append(self.ultimate_data_train_band1[a][11]-self.ultimate_data_train_band2[a][11])
+        for a in range(len(self.ultimate_data_test_band1)):
+            self.ultimate_data_test_band1[a].append(self.ultimate_data_test_band1[a][11]-self.ultimate_data_test_band2[a][11])
+            self.ultimate_data_test_band2[a].append(self.ultimate_data_test_band1[a][11]-self.ultimate_data_test_band2[a][11])
     def save_object(obj, filename):
         with open(filename, 'wb') as output:  # Overwrites any existing file.
             pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
@@ -185,6 +273,9 @@ class classifier():
     def __init__(self):
         self.rf = None
         self.data = None
+        self.oneband = 0
+        self.twoband = 0
+        self.mix = 0
     def pickParameters(self, selection):
         aux = []
         for feats in self.data.ultimate_data_train:
@@ -200,54 +291,93 @@ class classifier():
                 feats_aux.append(feats[index])
             test_aux.append(feats_aux)
         self.data.ultimate_data_test = test_aux
-    def classifier(self, data, change_parameters = None, means = None):
+    def classifier(self, data, change_parameters = None, means = None, thirdSol = False):
         self.data = data
         if(change_parameters!=None):
             self.pickParameters(change_parameters)
-        self.rf = RandomForestClassifier(n_estimators = 50, n_jobs=-1, random_state = 10, class_weight="balanced")
         values_train_final = data.ultimate_label_train['classALeRCE'].values
         onehot_values_train = []
         for j in values_train_final:
             cyka = [0,0,0,0,0,0]
             cyka[np.where(data.values == j)[0][0]] = 1
-            onehot_values_train.append(cyka)
+            onehot_values_train.append(np.where(data.values == j)[0][0])
         p=np.random.permutation(len(onehot_values_train))
         if(means == None):
+            self.rf = RandomForestClassifier(n_estimators=80, n_jobs=-1, random_state=10, class_weight="balanced")
             try:
-                self.data.ultimate_data_train = np.array(self.data.ultimate_data_train)[p]
+                self.ultimate_data_train = np.array(self.data.ultimate_data_train)[p]
             except:
                 print("data not available")
+                return
         else:
-            self.data.ultimate_data_train_band1 = np.array(self.data.ultimate_data_train_band1)[p]
-            self.data.ultimate_data_train_band2 = np.array(self.data.ultimate_data_train_band2)[p]
-            self.rf2 = RandomForestClassifier(n_estimators = 50, n_jobs=-1, random_state = 10, class_weight="balanced")
+            self.ultimate_data_train_band1 = np.array(self.data.ultimate_data_train_band1)[p]
+            self.ultimate_data_train_band2 = np.array(self.data.ultimate_data_train_band2)[p]
+            self.rf2 = RandomForestClassifier(n_estimators = 80, n_jobs=-1, random_state = 10, class_weight="balanced")
+            self.rf1 = RandomForestClassifier(n_estimators = 80, n_jobs=-1, random_state = 10, class_weight="balanced")
         onehot_values_train = np.array(onehot_values_train)[p]
         values_test_final = data.ultimate_label_test['classALeRCE'].values
         onehot_values_test = []
         for j in values_test_final:
             cyka = [0,0,0,0,0,0]
             cyka[np.where(data.values == j)[0][0]] = 1
-            onehot_values_test.append(cyka)
+            onehot_values_test.append(np.where(data.values == j)[0][0])
+
         if means==None:
-            self.rf.fit(self.data.ultimate_data_train, onehot_values_train)
+            self.rf.fit(self.ultimate_data_train, onehot_values_train)
             predictions = self.rf.predict(self.data.ultimate_data_test)
-            onehot_values_test = np.array(onehot_values_test).argmax(1)
-            predictions = np.array(predictions).argmax(1)
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
         else:
-            self.rf.fit(self.data.ultimate_data_train_band1, onehot_values_train)
-            self.rf2.fit(self.data.ultimate_data_train_band2, onehot_values_train)
-            predictions_one = self.rf.predict(self.data.ultimate_data_test_band1)
-            predictions_two = self.rf2.predict(self.data.ultimate_data_test_band2)
-            onehot_values_test = np.array(onehot_values_test).argmax(1)
+            self.rf1.fit(self.ultimate_data_train_band1, onehot_values_train)
+            self.rf2.fit(self.ultimate_data_train_band2, onehot_values_train)
             predictions = []
-            for i in range(len(predictions_one)):
-                aux = []
-                for j in range(len(predictions_one[i])):
-                    aux.append((predictions_one[i][j]+predictions_two[i][j])/2)
-                predictions.append(aux)
-            predictions = np.array(predictions).argmax(1)
+            if(not thirdSol):
+                predictions_one = self.rf2.predict(self.data.ultimate_data_test_band1)
+                predictions_two = self.rf2.predict(self.data.ultimate_data_test_band2)
+                for i in range(len(predictions_one)):
+                    aux = []
+                    aux.append(round((predictions_one[i] + predictions_two[i])/2))
+                    predictions.append(round((predictions_one[i] + predictions_two[i])/2))
+            else:
+                for j in range(len(self.data.ultimate_data_test_band1)):
+                    predict = self.twoBandPredictor(starFats=self.data.ultimate_data_test_band1[j],
+                                                             starFats2=self.data.ultimate_data_test_band2[j],
+                                                             starLen = self.data.ultimate_data_test_lengths[j])
+                    predictions.append(predict)
+                    if j%100 == 0:
+                        print(j)
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
+    def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None):
+        starFats = [starFats]
+        starFats2 = [starFats2]
+        if starLen == None:
+            prediction = []
+            predictions_one = self.rf1.predict(starFats)[0]
+            predictions_two = self.rf2.predict(starFats2)[0]
+            for j in range(len(predictions_one)):
+                prediction.append((predictions_one[j] + predictions_two[j]) / 2)
+            return prediction
+        else:
+            if(starLen[0]>=8 and starLen[1]<8):
+                self.oneband += 1
+                return self.rf1.predict(starFats)[0]
+            if(starLen[0]<8 and starLen[1]>=8):
+                self.twoband += 1
+                return self.rf2.predict(starFats2)[0]
+            if(starLen[0]>=8 and starLen[1]>=8):
+                self.mix += 1
+                predictions_one = self.rf1.predict(starFats)[0]
+                predictions_two = self.rf2.predict(starFats2)[0]
+                proba_one = self.rf1.predict_proba(starFats)[0]
+                proba_two = self.rf2.predict_proba(starFats)[0]
+                proba = []
+                if max(proba_one)>max(proba_two)+0.2:
+                    return predictions_one
+                if max(proba_two)>max(proba_one)+0.2:
+                    return predictions_two
+                for a in range(len(proba_one)):
+                    proba.append((proba_one[a]+proba_two[a])/2)
+                return proba.index(max(proba))
+
     def exportTree(self, features):
         estimator = self.rf.estimators_[0]
         export_graphviz(estimator, out_file='tree.dot',
@@ -317,48 +447,62 @@ def plot_confusion_matrix(y_true, y_pred, classes,
                     color="white" if cm[i, j] > thresh else "black")
     fig.tight_layout()
     return ax
-def generateDataFATS(filename="fats_processed.pkl", toFile=True, means=False):
+def generateDataFATS(filename="fats_processed.pkl", toFile=True, means=False, both=False, thirdSol = False):
     initialData = DataProcessor()
     initialData.generateLabelsPartition()
     if means:
-        initialData.applyFATSTwoLists(feature_list, exclude_list)
+        if thirdSol:
+            initialData.applyFATSTwoLists_third(feature_list, exclude_list)
+        else:
+            initialData.applyFATSTwoLists(feature_list, exclude_list, both)
     else:
          initialData.applyFATS(feature_list, exclude_list)
     if(toFile):
         initialData.save_object(filename)
 # Función para abrir información en formato pkl. En el caso de que no exista, se genera y se abre otro.
-def openDataFATSGenerado(filename, means=False):
+def openDataFATSGenerado(filename, means=False, both=False, thirdSol = False):
     try:
         input = open(filename, 'rb')
         data = pickle.load(input)
     except:
-        generateDataFATS(filename, means=means)
+        generateDataFATS(filename, means=means, both=both, thirdSol = thirdSol)
         data = openDataFATSGenerado(filename)
     return data
 #La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
 #generando un archivo para poder debuggear de inmediato la información.
 toFile = True
 means = True
+both = False
+thirdSol = True
 if toFile:
-    data = openDataFATSGenerado("fats_processed.pkl", means=means)
+    data = openDataFATSGenerado("fats_processed2.pkl", means=means, both=both, thirdSol = thirdSol)
 else:
     data = generateDataFATS(toFile=False, means=means)
 ## Por algún motivo existe un NaN a la hora de generar resultados, por lo cual se busco por aca. Es de suponer que
 ## Dado que ocurrió una vez puede ocurrir mas veces, esto es provisorio y por ende se generara un detector de nan
 ## Dsps
 nansuspect = []
-for a in data.ultimate_data_test_band2:
+for a in data.ultimate_data_train_band2:
     for j in a:
         if(math.isnan(j)):
             nansuspect.extend(a)
-index = data.ultimate_data_test_band2.index(nansuspect)
-data.ultimate_data_test_band2.pop(index)
-data.ultimate_data_test_band1.pop(index)
-stars_training = data.ultimate_label_test.index.unique()
-starnan = stars_training[index]
-data.ultimate_label_test.drop(starnan, axis=0, inplace=True)
+if(len(nansuspect)>0):
+    index = data.ultimate_data_train_band2.index(nansuspect)
+    data.ultimate_data_train_band2.pop(index)
+    data.ultimate_data_train_band1.pop(index)
+    if both:
+        data.ultimate_data_train.pop(index)
+    stars_training = data.ultimate_label_train.index.unique()
+    starnan = stars_training[index]
+    data.ultimate_label_train.drop(starnan, axis=0, inplace=True)
+if thirdSol:
+    data.fixColor()
 firstClassifier = classifier()
-firstClassifier.classifier(data, means=means)
+
+firstClassifier.classifier(data, means=means, thirdSol=thirdSol)
+if both:
+    data.mixTwo()
+    firstClassifier.classifier(data)
 feature_list.append('Period')
 feature_list2 = [
     'Amplitude2', 'AndersonDarling2', 'Autocor_length2',
@@ -370,5 +514,5 @@ feature_list2 = [
     'Std2', 'StetsonK2','Color']
 #Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
 #firstClassifier.exportTree(feature_list)
-firstClassifier.importanceVariable(feature_list)
+print("Solo banda 1: "+ str(firstClassifier.oneband)+" Solo banda 2: "+str(firstClassifier.twoband)+" Ambas: "+str(firstClassifier.mix))
 plt.show()
