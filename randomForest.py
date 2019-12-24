@@ -3,6 +3,10 @@ import numpy as np
 
 import math
 
+import itertools
+
+from sklearn import metrics
+
 import FATS
 
 import sklearn
@@ -30,8 +34,8 @@ from sklearn.utils.multiclass import unique_labels
 class DataProcessor:
     ## Inicialización de los datos
     def __init__(self):
-        data = pd.read_pickle('periodic_dataset/periodic_detections.pkl')
-        data.drop_duplicates()
+        #data = pd.read_pickle('periodic_dataset/periodic_detections.pkl')
+        #data.drop_duplicates()
         self.data = data
         self.dataValues = data.index.unique()
         self.labels = pd.read_pickle('periodic_dataset/periodic_labels.pkl')
@@ -276,19 +280,7 @@ class DataProcessor:
             pickle.dump(obj, output, pickle.HIGHEST_PROTOCOL)
 
 
-feature_list = [
-    'Amplitude', 'AndersonDarling', 'Autocor_length',
-    'Beyond1Std', 'CAR_sigma', 'CAR_mean', 'CAR_tau',
-    'Con', 'Eta_e', 'Gskew', 'MaxSlope', 'Mean',
-    'Meanvariance', 'MedianAbsDev', 'MedianBRP',
-    'PairSlopeTrend', 'PercentAmplitude', 'Q31',
-    'Rcs', 'Skew', 'SmallKurtosis',
-    'Std', 'StetsonK']
-exclude_list = ['StetsonJ',
-                'StetsonL',
-                'Eta_color',
-                'Q31_color',
-                'Color']
+
 class classifier():
     def __init__(self):
         self.rf = None
@@ -321,6 +313,7 @@ class classifier():
             cyka = [0,0,0,0,0,0]
             cyka[np.where(data.values == j)[0][0]] = 1
             onehot_values_train.append(np.where(data.values == j)[0][0])
+
         p=np.random.permutation(len(onehot_values_train))
         if(means == None or one_band):
             self.rf = RandomForestClassifier(n_estimators=80, n_jobs=-1, random_state=10, class_weight="balanced")
@@ -345,16 +338,16 @@ class classifier():
             cyka[np.where(data.values == j)[0][0]] = 1
             onehot_values_test.append(np.where(data.values == j)[0][0])
 
+
         if means==None and not one_band:
             self.rf.fit(self.ultimate_data_train, onehot_values_train)
             predictions = self.rf.predict(self.data.ultimate_data_test)
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
-        if one_band:
+        elif one_band:
             self.rf.fit(self.ultimate_data_train, onehot_values_train)
             predictions = self.rf.predict(self.data.ultimate_data_test_band1)
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
         else:
-
             self.rf1.fit(self.ultimate_data_train_band1, onehot_values_train)
             self.oob1 = self.rf1.oob_score_
             self.rf2.fit(self.ultimate_data_train_band2, onehot_values_train)
@@ -371,11 +364,12 @@ class classifier():
                 for j in range(len(self.data.ultimate_data_test_band1)):
                     predict = self.twoBandPredictor(starFats=self.data.ultimate_data_test_band1[j],
                                                              starFats2=self.data.ultimate_data_test_band2[j],
-                                                             starLen = self.data.ultimate_data_test_lengths[j])
+                                                             starLen = self.data.ultimate_data_test_lengths[j],
+                                                             correctLabel = onehot_values_test[j])
                     predictions.append(predict)
 
-
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
+        print(metrics.f1_score(onehot_values_test, predictions, average="weighted"))
     def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None, correctLabel=None):
         starFats = [starFats]
         starFats2 = [starFats2]
@@ -407,7 +401,7 @@ class classifier():
                 if predictions_one==predictions_two:
                     return predictions_one
                 for a in range(len(proba_one)):
-                    proba.append((proba_one[a]*self.oob1**2+proba_two[a]*self.oob2**2)/(self.oob1**2+self.oob2**2))
+                    proba.append((proba_one[a]*self.oob1**2*starLen[0]+proba_two[a]*self.oob2**2*starLen[1])/(self.oob1**2*starLen[0]+self.oob2**2*starLen[1]))
                 return proba.index(max(proba))
 
     def exportTree(self, features):
@@ -452,33 +446,26 @@ def plot_confusion_matrix(y_true, y_pred, classes,
         print('Confusion matrix, without normalization')
 
     print(cm)
-
-    fig, ax = plt.subplots()
-    im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
-    ax.figure.colorbar(im, ax=ax)
-    # We want to show all ticks...
-    ax.set(xticks=np.arange(cm.shape[1]),
-           yticks=np.arange(cm.shape[0]),
-           # ... and label them with the respective list entries
-           xticklabels=classes, yticklabels=classes,
-           title=title,
-           ylabel='True label',
-           xlabel='Predicted label')
-
-    # Rotate the tick labels and set their alignment.
-    plt.setp(ax.get_xticklabels(), rotation=45, ha="right",
-             rotation_mode="anchor")
-
     # Loop over data dimensions and create text annotations.
     fmt = '.2f' if normalize else 'd'
+    plt.figure(figsize=(8, 6), dpi=90)
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
     thresh = cm.max() / 2.
-    for i in range(cm.shape[0]):
-        for j in range(cm.shape[1]):
-            ax.text(j, i, format(cm[i, j], fmt),
-                    ha="center", va="center",
-                    color="white" if cm[i, j] > thresh else "black")
-    fig.tight_layout()
-    return ax
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
+
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.grid('off')
+    plt.tight_layout()
 def generateDataFATS(filename="fats_processed.pkl", toFile=True, means=False, both=False, thirdSol = False):
     initialData = DataProcessor()
     initialData.generateLabelsPartition()
@@ -502,47 +489,3 @@ def openDataFATSGenerado(filename, means=False, both=False, thirdSol = False):
     return data
 #La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
 #generando un archivo para poder debuggear de inmediato la información.
-toFile = True
-means = None
-both = True
-one_band = False
-thirdSol = True
-if toFile:
-    data = openDataFATSGenerado("fats_processed_final.pkl", means=means, both=both, thirdSol = thirdSol)
-else:
-    data = generateDataFATS(toFile=False, means=means)
-## Por algún motivo existe un NaN a la hora de generar resultados, por lo cual se busco por aca. Es de suponer que
-## Dado que ocurrió una vez puede ocurrir mas veces, esto es provisorio y por ende se generara un detector de nan
-## Dsps
-nansuspect = []
-for a in data.ultimate_data_train_band2:
-    for j in a:
-        if(math.isnan(j)):
-            nansuspect.extend(a)
-if(len(nansuspect)>0):
-    index = data.ultimate_data_train_band2.index(nansuspect)
-    data.ultimate_data_train_band2.pop(index)
-    data.ultimate_data_train_band1.pop(index)
-    if both:
-        data.ultimate_data_train.pop(index)
-    stars_training = data.ultimate_label_train.index.unique()
-    starnan = stars_training[index]
-    data.ultimate_label_train.drop(starnan, axis=0, inplace=True)
-if thirdSol:
-    data.fixColor()
-firstClassifier = classifier()
-data.ultimateDataLength()
-firstClassifier.classifier(data, means=means, thirdSol=thirdSol, one_band=one_band)
-feature_list.extend('Period')
-feature_list2 = [
-    'Amplitude2', 'AndersonDarling2', 'Autocor_length2',
-    'Beyond1Std2', 'CAR_sigma2', 'CAR_mean2', 'CAR_tau2',
-    'Con2', 'Eta_e2', 'Gskew2', 'MaxSlope2', 'Mean2',
-    'Meanvariance2', 'MedianAbsDev2', 'MedianBRP2',
-    'PairSlopeTrend2', 'PercentAmplitude2', 'Q312',
-    'Rcs2', 'Skew2', 'SmallKurtosis2',
-    'Std2', 'StetsonK2','Color']
-#Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
-firstClassifier.importanceVariable(feature_list)
-print("Solo banda 1: "+ str(firstClassifier.oneband)+" Solo banda 2: "+str(firstClassifier.twoband)+" Ambas: "+str(firstClassifier.mix))
-plt.show()
