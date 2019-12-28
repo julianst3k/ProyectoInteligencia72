@@ -9,7 +9,22 @@ print(detections.head())
 print(labels.head())
 
 # Plot an object
-first_object_oid = detections.index.values[0]
+
+for stars in labels.index.unique():
+    first_lc = detections.loc[stars]
+    first_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+    flc1 = first_lc[first_lc.fid == 1].sort_values('mjd').drop_duplicates('mjd')
+    second_lc = first_lc[(first_lc.sigmapsf_corr < 1) & (first_lc.sigmapsf_corr > 0)]
+    flc2 = second_lc[first_lc.fid == 2].sort_values('mjd').drop_duplicates('mjd')
+    flc1.dropna()
+    flc2.dropna()
+    valores = flc1[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+    valores2 = flc2[['magpsf_corr', 'mjd', 'sigmapsf_corr']].values
+    print(len(valores), len(valores2))
+    if (len(valores) < 8 and len(valores2) > 15):
+        first_object_oid = stars
+        break
+
 first_object_detections = detections.loc[first_object_oid]
 
 print(f'Object {first_object_oid} has {len(first_object_detections)} detections')

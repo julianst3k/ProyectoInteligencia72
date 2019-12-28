@@ -303,7 +303,7 @@ class classifier():
                 feats_aux.append(feats[index])
             test_aux.append(feats_aux)
         self.data.ultimate_data_test = test_aux
-    def classifier(self, data, change_parameters = None, means = None, thirdSol = False, one_band = False):
+    def classifier(self, data, change_parameters = None, means = False, thirdSol = False, one_band = False):
         self.data = data
         if(change_parameters!=None):
             self.pickParameters(change_parameters)
@@ -315,7 +315,7 @@ class classifier():
             onehot_values_train.append(np.where(data.values == j)[0][0])
 
         p=np.random.permutation(len(onehot_values_train))
-        if(means == None or one_band):
+        if(not means or one_band):
             self.rf = RandomForestClassifier(n_estimators=80, n_jobs=-1, random_state=10, class_weight="balanced")
             try:
                 if(not one_band):
@@ -338,8 +338,8 @@ class classifier():
             cyka[np.where(data.values == j)[0][0]] = 1
             onehot_values_test.append(np.where(data.values == j)[0][0])
 
-
-        if means==None and not one_band:
+        self.values_test = onehot_values_test
+        if not means and not one_band:
             self.rf.fit(self.ultimate_data_train, onehot_values_train)
             predictions = self.rf.predict(self.data.ultimate_data_test)
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
@@ -365,12 +365,15 @@ class classifier():
                     predict = self.twoBandPredictor(starFats=self.data.ultimate_data_test_band1[j],
                                                              starFats2=self.data.ultimate_data_test_band2[j],
                                                              starLen = self.data.ultimate_data_test_lengths[j],
-                                                             correctLabel = onehot_values_test[j])
+                                                             nro=j)
+
+                    if j == 0 or j == 807:
+                        print(predict)
                     predictions.append(predict)
 
             plot_confusion_matrix(onehot_values_test, predictions, data.values)
         print(metrics.f1_score(onehot_values_test, predictions, average="weighted"))
-    def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None, correctLabel=None):
+    def twoBandPredictor(self, starFats = None, starFats2 = None, starLen = None, nro=None):
         starFats = [starFats]
         starFats2 = [starFats2]
         if starLen == None:
@@ -393,6 +396,8 @@ class classifier():
                 predictions_two = self.rf2.predict(starFats2)[0]
                 proba_one = self.rf1.predict_proba(starFats)[0]
                 proba_two = self.rf2.predict_proba(starFats2)[0]
+                if nro == 0 or nro == 807:
+                    print(proba_one, proba_two)
                 proba = []
                 if max(proba_one)>max(proba_two)+0.2:
                     return predictions_one
@@ -402,6 +407,8 @@ class classifier():
                     return predictions_one
                 for a in range(len(proba_one)):
                     proba.append((proba_one[a]*self.oob1**2*starLen[0]+proba_two[a]*self.oob2**2*starLen[1])/(self.oob1**2*starLen[0]+self.oob2**2*starLen[1]))
+                if(nro==0 or nro==807):
+                    print(proba)
                 return proba.index(max(proba))
 
     def exportTree(self, features):
@@ -420,6 +427,18 @@ class classifier():
             print('%s & %.3f' % (features[index], feature_importances[index]))
             if(amount>0.8):
                 break
+    def compareModel(self, classifier):
+        try:
+            probas = self.rf.predict_proba(self.data.ultimate_data_test_band1)
+        except:
+            probas = self.rf.predict_proba(self.data.ultimate_data_test)
+        try:
+            probas2 = classifier.rf.predict_proba(classifier.data.ultimate_data_test_band1)
+        except:
+            probas2 = classifier.rf.predict_proba(classifier.data.ultimate_data_test)
+        for i in range(len(probas)):
+            if np.argmax(probas[i])!=np.argmax(probas2[i]):
+                print(i, probas[i], probas2[i], self.values_test[i], np.argmax(probas[i])==self.values_test[i], np.argmax(probas2[i])==self.values_test[i])
 
 def plot_confusion_matrix(y_true, y_pred, classes,
                           normalize=True,
@@ -489,3 +508,75 @@ def openDataFATSGenerado(filename, means=False, both=False, thirdSol = False):
     return data
 #La información puede ser obtenida mediante el uso de generateDataFATS con flag False en toFile, que lo corre cada vez que se ejecuta (No ocupa memoria), o
 #generando un archivo para poder debuggear de inmediato la información.
+
+
+if __name__ == '__main__':
+    feature_list = [
+        'Amplitude', 'AndersonDarling', 'Autocor_length',
+        'Beyond1Std', 'CAR_sigma', 'CAR_mean', 'CAR_tau',
+        'Con', 'Eta_e', 'Gskew', 'MaxSlope', 'Mean',
+        'Meanvariance', 'MedianAbsDev', 'MedianBRP',
+        'PairSlopeTrend', 'PercentAmplitude', 'Q31',
+        'Rcs', 'Skew', 'SmallKurtosis',
+        'Std', 'StetsonK']
+    exclude_list = ['StetsonJ',
+                    'StetsonL',
+                    'Eta_color',
+                    'Q31_color',
+                    'Color']
+    # Para activar el file
+    toFile = True
+    # Para sacar la media entre dos modelos
+    means = True
+    # Para usar dos bandas
+    both = True
+    # Para usar un modelo
+    one_band = False
+    # Para usar la tercera solución, aka dos modelos
+    thirdSol = True
+    if toFile:
+        data = openDataFATSGenerado("fats_processed_final.pkl", means=means, both=both, thirdSol=thirdSol)
+    else:
+        data = generateDataFATS(toFile=False, means=means)
+    ## Por algún motivo existe un NaN a la hora de generar resultados, por lo cual se busco por aca. Es de suponer que
+    ## Dado que ocurrió una vez puede ocurrir mas veces, esto es provisorio y por ende se generara un detector de nan
+    ## Dsps
+    nansuspect = []
+    for a in data.ultimate_data_train_band2:
+        for j in a:
+            if (math.isnan(j)):
+                nansuspect.extend(a)
+    if (len(nansuspect) > 0):
+        index = data.ultimate_data_train_band2.index(nansuspect)
+        data.ultimate_data_train_band2.pop(index)
+        data.ultimate_data_train_band1.pop(index)
+        if both:
+            data.ultimate_data_train.pop(index)
+        stars_training = data.ultimate_label_train.index.unique()
+        starnan = stars_training[index]
+        data.ultimate_label_train.drop(starnan, axis=0, inplace=True)
+    data.ultimateDataLength()
+    if thirdSol:
+        data.fixColor()
+    firstClassifier = classifier()
+    firstClassifier.classifier(data, means=means, thirdSol=thirdSol, one_band=one_band)
+    feature_list.append('Period')
+    if not means:
+        if not one_band:
+            feature_list2 = [
+        'Amplitude2', 'AndersonDarling2', 'Autocor_length2',
+        'Beyond1Std2', 'CAR_sigma2', 'CAR_mean2', 'CAR_tau2',
+        'Con2', 'Eta_e2', 'Gskew2', 'MaxSlope2', 'Mean2',
+        'Meanvariance2', 'MedianAbsDev2', 'MedianBRP2',
+        'PairSlopeTrend2', 'PercentAmplitude2', 'Q312',
+        'Rcs2', 'Skew2', 'SmallKurtosis2',
+        'Std2', 'StetsonK2', 'Color']
+            feature_list.extend(feature_list2)
+            firstClassifier.importanceVariable(feature_list)
+        else:
+            firstClassifier.importanceVariable(feature_list)
+
+    # Para sacar el .dot del árbol y la importancia de las variables, eliminar los #
+    print("Solo banda 1: " + str(firstClassifier.oneband) + " Solo banda 2: " + str(
+        firstClassifier.twoband) + " Ambas: " + str(firstClassifier.mix))
+    plt.show()
